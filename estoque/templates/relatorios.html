@@ -1,0 +1,77 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Boteco 🍻 - Relatórios</title>
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+<div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    
+    <header class="mb-8 flex justify-between items-center">
+        </header>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-semibold mb-4">Top 10 Produtos Mais Vendidos</h2>
+            <canvas id="topProdutosChart" height="200"></canvas>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-semibold mb-4">Evolução de Vendas por Semana</h2>
+            <canvas id="vendasPorSemanaChart" height="200"></canvas>
+        </div>
+    </div>
+    
+    <div class="mt-8">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-xl mx-auto">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Distribuição de Vendas por Unidade</h2>
+            <canvas id="vendasPorUnidadeChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+{{ top_produtos_labels|json_script:"top-produtos-labels" }}
+{{ top_produtos_data|json_script:"top-produtos-data" }}
+{{ top_unidades_labels|json_script:"top-unidades-labels" }}
+{{ top_unidades_data|json_script:"top-unidades-data" }}
+{{ vendas_semana_labels|json_script:"vendas-semana-labels" }}
+{{ vendas_semana_data|json_script:"vendas-semana-data" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        feather.replace();
+
+        // Gráfico 1: Top Produtos
+        const topProdutosLabels = JSON.parse(document.getElementById('top-produtos-labels').textContent);
+        const topProdutosData = JSON.parse(document.getElementById('top-produtos-data').textContent);
+        new Chart(document.getElementById('topProdutosChart'), {
+            type: 'bar', data: { labels: topProdutosLabels, datasets: [{ label: 'Qtd. Vendida', data: topProdutosData, backgroundColor: 'rgba(79, 70, 229, 0.8)' }] },
+            options: { indexAxis: 'y', plugins: { legend: { display: false } } }
+        });
+
+        // Gráfico 2: Vendas por Semana
+        const vendasSemanaLabels = JSON.parse(document.getElementById('vendas-semana-labels').textContent);
+        const vendasSemanaData = JSON.parse(document.getElementById('vendas-semana-data').textContent);
+        new Chart(document.getElementById('vendasPorSemanaChart'), {
+            type: 'line', data: { labels: vendasSemanaLabels, datasets: [{ label: 'Itens Vendidos', data: vendasSemanaData, backgroundColor: 'rgba(5, 150, 105, 0.2)', borderColor: 'rgba(5, 150, 105, 1)', tension: 0.1, fill: true }] },
+            options: { plugins: { legend: { display: false } } }
+        });
+
+        // Gráfico 3: Vendas por Unidade
+        const topUnidadesLabels = JSON.parse(document.getElementById('top-unidades-labels').textContent);
+        const topUnidadesData = JSON.parse(document.getElementById('top-unidades-data').textContent);
+        new Chart(document.getElementById('vendasPorUnidadeChart'), {
+            type: 'doughnut', data: { labels: topUnidadesLabels, datasets: [{ data: topUnidadesData, backgroundColor: ['rgba(79, 70, 229, 0.8)', 'rgba(30, 64, 175, 0.8)', 'rgba(107, 114, 128, 0.8)','rgba(219, 39, 119, 0.8)'] }] },
+        });
+    });
+</script>
+
+</body>
+</html>

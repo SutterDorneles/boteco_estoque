@@ -1,0 +1,47 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+    {{ block.super }}
+
+    {% if object_id and not contagem_finalizada %}
+        <div style="padding: 20px;">
+            <h2 style="margin-top: 20px;">Lançamento de Contagem Física</h2>
+            <p>Para cada produto listado abaixo, insira a quantidade contada fisicamente na unidade <strong>{{ original.unidade.nome }}</strong>.</p>
+
+            <form method="POST">
+                {% csrf_token %}
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Produto (Insumo)</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Quantidade no Sistema</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">Quantidade Física (Contada)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens_para_contagem %}
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd;">{{ item.produto_nome }}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">{{ item.quantidade_sistema|floatformat:2 }}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">
+                                <input type="number" step="0.1" name="produto_{{ item.produto_id }}" 
+                                       value="{{ item.quantidade_fisica|floatformat:2|default_if_none:'' }}" 
+                                       style="width: 100px;">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div style="margin-top: 20px;">
+                    <input type="submit" name="_save_contagem" value="Salvar Contagem">
+                </div>
+            </form>
+        </div>
+    {% elif contagem_finalizada %}
+        <div style="padding: 20px; border: 1px solid orange; background-color: #fffbe6; margin-top: 20px;">
+            <h2 style="color: orange;">Contagem Finalizada</h2>
+            <p>Os ajustes de estoque para esta contagem já foram processados. Não é possível fazer novas alterações.</p>
+        </div>
+    {% endif %}
+{% endblock %}

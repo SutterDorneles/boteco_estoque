@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Pedido de Reposição #{{ pedido.id }}</title>
+    <style>
+        body { font-family: 'Helvetica', sans-serif; font-size: 12px; color: #333; }
+        h1 { color: #4A5568; border-bottom: 2px solid #4A5568; padding-bottom: 5px; }
+        .header { margin-bottom: 30px; }
+        .header p { margin: 0; padding: 2px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .check { width: 40px; text-align: center; }
+        footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Pedido de Reposição #{{ pedido.id }}</h1>
+        <p><strong>Para Unidade:</strong> {{ pedido.unidade_destino.nome }}</p>
+        <p><strong>Status do Pedido:</strong> {{ pedido.get_status_display }}</p>
+        <p><strong>Data de Emissão:</strong> {{ data_emissao }}</p>
+    </div>
+
+    <p>Por favor, separar e enviar os seguintes itens:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Produto</th>
+                <th style="text-align: right;">Quantidade Solicitada</th>
+                <th>Un. Medida</th>
+                <th class="check">Confere?</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in pedido.itens.all %}
+            <tr>
+                <td>{{ item.produto.nome }}</td>
+                <td style="text-align: right;">{{ item.quantidade_solicitada|floatformat:2 }}</td>
+                <td>{{ item.produto.unidade_medida }}</td>
+                <td class="check">[ &nbsp; ]</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 80px;">
+        <p>_________________________________________</p>
+        <p>Assinatura do Responsável (Separação)</p>
+    </div>
+
+    <footer>
+        Sistema de Controle de Estoque Boteco - Gerado em {{ data_emissao }}
+    </footer>
+</body>
+</html>

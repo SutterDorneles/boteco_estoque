@@ -1,0 +1,104 @@
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework import routers
+from django.shortcuts import render
+from estoque.models import Unidade, Produto, Movimentacao, Estoque, PedidoReposicao, PedidoCompra, VendaDiaria
+from django.db.models import Sum
+from django.db.models.functions import TruncWeek 
+
+# ✅ 'ReposicaoViewSet' foi removido e as novas ViewSets foram adicionadas
+from estoque.views import (
+    UnidadeViewSet, ProdutoViewSet, EstoqueViewSet, VendaDiariaViewSet, 
+    MovimentacaoViewSet, PedidoReposicaoViewSet, ItemReposicaoViewSet
+)
+
+router = routers.DefaultRouter()
+router.register(r'unidades', UnidadeViewSet)
+router.register(r'produtos', ProdutoViewSet)
+router.register(r'estoque', EstoqueViewSet)
+router.register(r'vendas', VendaDiariaViewSet)
+router.register(r'movimentacoes', MovimentacaoViewSet)
+# ✅ A rota do 'ReposicaoViewSet' foi removida
+# router.register(r'reposicoes', ReposicaoViewSet) 
+# ✅ Adicionamos as novas rotas para a API
+router.register(r'pedidos-reposicao', PedidoReposicaoViewSet)
+router.register(r'itens-reposicao', ItemReposicaoViewSet)
+
+
+# ✅ SUBSTITUA SUA FUNÇÃO 'home' POR ESTA VERSÃO COMPLETA
+def home(request):
+    # Lógica do filtro de estoque (continua igual)
+    unidade_selecionada_id = request.GET.get('unidade_id')
+    estoque_items = Estoque.objects.select_related('unidade', 'produto').all().order_by('unidade__nome', 'produto__nome')
+    if unidade_selecionada_id and unidade_selecionada_id.isdigit():
+        estoque_items = estoque_items.filter(unidade_id=unidade_selecionada_id)
+
+    # ✅ NOVAS BUSCAS PARA O DASHBOARD
+    # Busca todos os pedidos de reposição que estão pendentes
+    reposicoes_pendentes = PedidoReposicao.objects.filter(status="PENDENTE").order_by('data_criacao')
+    
+    # Busca todos os pedidos de compra que ainda não foram recebidos
+    compras_pendentes = PedidoCompra.objects.filter(status="PENDENTE").order_by('data_pedido')
+
+    # Busca todas as unidades para popular o filtro
+    todas_unidades = Unidade.objects.all()
+
+    context = {
+        # Cards de Resumo
+        "total_produtos": Produto.objects.filter(tipo='INSUMO').count(), # Contando só insumos
+        "total_unidades": Unidade.objects.count(),
+        "total_movimentacoes": Movimentacao.objects.count(),
+        
+        # Listas de Ações Urgentes
+        "reposicoes_pendentes": reposicoes_pendentes,
+        "compras_pendentes": compras_pendentes,
+        
+        # Tabela de Estoque
+        "estoque_items": estoque_items,
+        "todas_unidades": todas_unidades,
+        "unidade_selecionada_id": unidade_selecionada_id,
+    }
+    return render(request, "home.html", context)
+
+def relatorios_view(request):
+    # Relatório 1: Top 10 Produtos
+    vendas_por_produto = (VendaDiaria.objects
+        .values('produto__nome')
+        .annotate(total_vendido=Sum('quantidade')).order_by('-total_vendido')[:10])
+    top_produtos_labels = [item['produto__nome'] for item in vendas_por_produto]
+    top_produtos_data = [item['total_vendido'] for item in vendas_por_produto]
+
+    # Relatório 2: Top Unidades por Vendas
+    vendas_por_unidade = (VendaDiaria.objects
+        .values('unidade__nome')
+        .annotate(total_vendido=Sum('quantidade')).order_by('-total_vendido'))
+    top_unidades_labels = [item['unidade__nome'] for item in vendas_por_unidade]
+    top_unidades_data = [item['total_vendido'] for item in vendas_por_unidade]
+
+    # Relatório 3: Vendas POR SEMANA
+    vendas_por_semana = (VendaDiaria.objects
+        .annotate(semana=TruncWeek('data'))
+        .values('semana')
+        .annotate(total_vendido=Sum('quantidade')).order_by('semana'))
+
+    # ✅ CORREÇÃO AQUI: Removemos o .date() desnecessário
+    vendas_semana_labels = [item['semana'].strftime('Semana %d/%m') for item in vendas_por_semana]
+    vendas_semana_data = [item['total_vendido'] for item in vendas_por_semana]
+
+    context = {
+        'top_produtos_labels': top_produtos_labels,
+        'top_produtos_data': top_produtos_data,
+        'top_unidades_labels': top_unidades_labels,
+        'top_unidades_data': top_unidades_data,
+        'vendas_semana_labels': vendas_semana_labels,
+        'vendas_semana_data': vendas_semana_data,
+    }
+    return render(request, "relatorios.html", context)
+
+
+urlpatterns = [
+    path("", home, name="home"),
+    path("relatorios/", relatorios_view, name="relatorios"),    
+    path("admin/", admin.site.urls),
+    path("api/", include(router.urls)),
+]

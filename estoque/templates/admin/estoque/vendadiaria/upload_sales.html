@@ -1,0 +1,17 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block content %}
+<div id="content-main">
+    <form action="" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <h2>Importar Relatório de Vendas</h2>
+            {{ form.as_p }}
+        </fieldset>
+        <div class="submit-row">
+            <input type="submit" value="{% translate 'Importar' %}">
+        </div>
+    </form>
+</div>
+{% endblock %}

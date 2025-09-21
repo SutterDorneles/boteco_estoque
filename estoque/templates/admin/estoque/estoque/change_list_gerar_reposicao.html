@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  {% if cl.get_filters_params.unidade__id__exact %}
+    <li>
+      <a href="gerar-reposicao/?unidade_id={{ cl.get_filters_params.unidade__id__exact }}" class="addlink">
+        Analisar e Pedir Reposição
+      </a>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
