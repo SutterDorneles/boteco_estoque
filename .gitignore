@@ -1,0 +1,28 @@
+# Arquivo .gitignore para projetos Django
+
+# Arquivos de Cache do Python
+__pycache__/
+*.pyc
+
+# Banco de Dados
+db.sqlite3
+*.sqlite3
+
+# Ambientes Virtuais
+venv/
+venv_limpa/
+venv_final/
+env/
+
+# Arquivos de configuração de IDEs
+.vscode/
+.idea/
+
+# Arquivos de dependências do S.O.
+.DS_Store
+
+# Pasta de arquivos estáticos gerada pelo collectstatic
+staticfiles/
+
+# Arquivos de Log
+*.log

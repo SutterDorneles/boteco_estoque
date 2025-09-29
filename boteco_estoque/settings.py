@@ -27,6 +27,7 @@ SECRET_KEY = "django-insecure-=y3%3ch^u@6&u+bxtczdcl&12v*o3mmc)g54c1iyknck4@u&8a
 DEBUG = False
 
 ALLOWED_HOSTS = [
+    '127.0.0.1',    
     'sutter.pythonanywhere.com', # Troque 'seunome' pelo seu usuário
     'estoque.rhori.com.br'      # Seu subdomínio
 ]

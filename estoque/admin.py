@@ -275,45 +275,49 @@ class VendaDiariaAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
     
-    # ✅ VERSÃO FINAL E LIMPA
     def importar_vendas_view(self, request):
         if request.method == "POST":
             form = ImportarVendasForm(request.POST, request.FILES)
             if form.is_valid():
                 unidade = form.cleaned_data['unidade']
                 arquivo = form.cleaned_data['arquivo_xls']
-
                 try:
-                    # REMOVEMOS o 'skiprows=4'. Agora ele lê desde a primeira linha.
                     df = pd.read_excel(arquivo)
                 except Exception as e:
                     messages.error(request, f"Erro ao ler o arquivo: {e}")
                     return redirect('admin:estoque_vendadiaria_changelist')
 
                 erros = []
-                
                 with transaction.atomic():
                     for index, row in df.iterrows():
                         try:
                             item_completo = str(row['ITEM'])
-                            partes = item_completo.split(' - ', 1)
-                            item_nome_sujo = partes[1].strip() if len(partes) > 1 else item_completo.strip()
-                            item_nome_limpo = re.sub(r'\s+', ' ', item_nome_sujo).strip()
-
+                            if ' - ' in item_completo:
+                                item_nome_sujo = item_completo.split(' - ', 1)[1]
+                            else:
+                                item_nome_sujo = item_completo
+                            
+                            item_nome_limpo = ' '.join(item_nome_sujo.split()).strip()
+                            
                             valor_quantidade = row['TOTAL']
                             
-                            if pd.isna(valor_quantidade) or item_nome_limpo == '':
+                            if pd.isna(valor_quantidade) or not item_nome_limpo or item_nome_limpo.lower() == 'nan':
                                 continue
                             
                             try:
-                                valor_processado = str(valor_quantidade).replace(',', '.')
+                                # ✅ CORREÇÃO AQUI: Limpeza em duas etapas
+                                valor_sem_milhar = str(valor_quantidade).replace('.', '')
+                                valor_processado = valor_sem_milhar.replace(',', '.')
                                 quantidade = int(math.ceil(float(valor_processado)))
                             except ValueError:
                                 continue
 
-                            produto, created = Produto.objects.get_or_create(nome=item_nome_limpo)
+                            produto, created = Produto.objects.get_or_create(
+                                nome=item_nome_limpo,
+                                defaults={'tipo': 'INSUMO'}
+                            )
                             if created:
-                                messages.info(request, f"Produto '{item_nome_limpo}' não existia e foi cadastrado automaticamente.")
+                                messages.info(request, f"Produto '{item_nome_limpo}' não existia e foi cadastrado como Insumo.")
 
                             VendaDiaria.objects.create(
                                 unidade=unidade,
@@ -325,24 +329,25 @@ class VendaDiariaAdmin(admin.ModelAdmin):
                             continue
                         except Exception as e:
                             erros.append(f"Erro na linha {index + 2}: {e}")
-
+                
                 if erros:
                     for erro in erros:
                         messages.warning(request, erro)
-                    messages.success(request, "Processamento concluído. Algumas vendas foram criadas, mas com erros.")
+                    messages.success(request, "Processamento concluído com erros.")
                 else:
                     messages.success(request, "Processamento concluído com sucesso!")
-
+                
                 return redirect('admin:estoque_vendadiaria_changelist')
         else:
             form = ImportarVendasForm()
-
+        
         context = {
             "form": form,
             "title": "Importar Relatório de Vendas",
             "opts": self.model._meta,
         }
         return render(request, "admin/estoque/vendadiaria/upload_sales.html", context)
+
 
 # A classe Admin para Movimentacao não precisa de mudanças
 @admin.register(Movimentacao)
