@@ -57,11 +57,23 @@ class ProdutoAdmin(admin.ModelAdmin):
 @admin.register(Estoque)
 class EstoqueAdmin(admin.ModelAdmin):
     list_display = ("unidade", "produto", "quantidade", "estoque_minimo")
-    list_filter = ("unidade", "produto")
+    list_filter = ("unidade", "produto__tipo", "produto")
     search_fields = ("unidade__nome", "produto__nome")
     list_editable = ("quantidade", "estoque_minimo")
     change_list_template = "admin/estoque/estoque/change_list_gerar_reposicao.html"
+    
+    # ✅ A ÚNICA CUSTOMIZAÇÃO: O FILTRO PADRÃO
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
 
+        # Se o usuário clicou em um filtro de tipo de produto na URL,
+        # nós não fazemos nada e deixamos o Django trabalhar.
+        if 'produto__tipo__exact' in request.GET:
+            return qs
+        
+        # Se não, é a primeira visita, então aplicamos nosso filtro padrão.
+        return qs.filter(produto__tipo='INSUMO')    
+    
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [

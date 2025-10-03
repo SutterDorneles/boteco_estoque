@@ -20,17 +20,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-=y3%3ch^u@6&u+bxtczdcl&12v*o3mmc)g54c1iyknck4@u&8a"
+# settings.py
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+# Para a SECRET_KEY, ele vai pegar do .env. Tenha um valor padrão se quiser rodar local sem .env
+SECRET_KEY = os.getenv('SECRET_KEY', 'sua-chave-secreta-local-padrao')
 
-ALLOWED_HOSTS = [
-    '127.0.0.1',    
-    'sutter.pythonanywhere.com', # Troque 'seunome' pelo seu usuário
-    'estoque.rhori.com.br'      # Seu subdomínio
-]
+# Para o DEBUG, ele pega do .env. Se não achar, o padrão é True (para rodar local)
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
+
+# Para o ALLOWED_HOSTS, ele pega do .env. Se não achar, usa os locais.
+ALLOWED_HOSTS_STRING = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost')
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',')]
 
 
 # Application definition

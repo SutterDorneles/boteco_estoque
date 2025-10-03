@@ -25,38 +25,45 @@ router.register(r'pedidos-reposicao', PedidoReposicaoViewSet)
 router.register(r'itens-reposicao', ItemReposicaoViewSet)
 
 
-# ✅ SUBSTITUA SUA FUNÇÃO 'home' POR ESTA VERSÃO COMPLETA
+# ✅ SUBSTITUA SUA FUNÇÃO 'home' POR ESTA VERSÃO
 def home(request):
-    # Lógica do filtro de estoque (continua igual)
+    # Lógica do filtro de unidade (continua igual)
     unidade_selecionada_id = request.GET.get('unidade_id')
-    estoque_items = Estoque.objects.select_related('unidade', 'produto').all().order_by('unidade__nome', 'produto__nome')
+    
+    # ✅ NOVO: Lógica do filtro de tipo de produto
+    # Pega o tipo selecionado do URL. Se nada for passado, o padrão é 'INSUMO'.
+    tipo_selecionado = request.GET.get('tipo', 'INSUMO')
+
+    # Começa a busca por todos os itens de estoque
+    estoque_items = Estoque.objects.select_related('unidade', 'produto').all()
+
+    # Aplica o filtro de unidade, se houver
     if unidade_selecionada_id and unidade_selecionada_id.isdigit():
         estoque_items = estoque_items.filter(unidade_id=unidade_selecionada_id)
 
-    # ✅ NOVAS BUSCAS PARA O DASHBOARD
-    # Busca todos os pedidos de reposição que estão pendentes
-    reposicoes_pendentes = PedidoReposicao.objects.filter(status="PENDENTE").order_by('data_criacao')
-    
-    # Busca todos os pedidos de compra que ainda não foram recebidos
-    compras_pendentes = PedidoCompra.objects.filter(status="PENDENTE").order_by('data_pedido')
+    # ✅ NOVO: Aplica o filtro de tipo de produto
+    # Se o tipo selecionado não for 'TODOS', filtra pelo tipo.
+    if tipo_selecionado != 'TODOS':
+        estoque_items = estoque_items.filter(produto__tipo=tipo_selecionado)
 
-    # Busca todas as unidades para popular o filtro
+    # Ordena o resultado final
+    estoque_items = estoque_items.order_by('unidade__nome', 'produto__nome')
+
+    # O resto das buscas para o dashboard continua igual
+    reposicoes_pendentes = PedidoReposicao.objects.filter(status="PENDENTE").order_by('data_criacao')
+    compras_pendentes = PedidoCompra.objects.filter(status="PENDENTE").order_by('data_pedido')
     todas_unidades = Unidade.objects.all()
 
     context = {
-        # Cards de Resumo
-        "total_produtos": Produto.objects.filter(tipo='INSUMO').count(), # Contando só insumos
+        "total_produtos": Produto.objects.filter(tipo='INSUMO').count(),
         "total_unidades": Unidade.objects.count(),
         "total_movimentacoes": Movimentacao.objects.count(),
-        
-        # Listas de Ações Urgentes
         "reposicoes_pendentes": reposicoes_pendentes,
         "compras_pendentes": compras_pendentes,
-        
-        # Tabela de Estoque
         "estoque_items": estoque_items,
         "todas_unidades": todas_unidades,
         "unidade_selecionada_id": unidade_selecionada_id,
+        "tipo_selecionado": tipo_selecionado, # ✅ Enviamos o filtro ativo para o template
     }
     return render(request, "home.html", context)
 
