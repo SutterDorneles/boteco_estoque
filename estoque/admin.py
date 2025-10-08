@@ -556,7 +556,7 @@ class ContagemEstoqueAdmin(admin.ModelAdmin):
                     
                     if quantidade_fisica_str and quantidade_fisica_str.strip() != '':
                         try:
-                            quantidade_fisica = float(quantidade_fisica_str.replace(',', '.'))
+                            quantidade_fisica = int(float(quantidade_fisica_str.replace(',', '.')))
                             produto = Produto.objects.get(id=produto_id)
                             
                             ItemContagemEstoque.objects.update_or_create(

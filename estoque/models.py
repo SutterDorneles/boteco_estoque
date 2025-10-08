@@ -190,8 +190,8 @@ class ItemContagemEstoque(models.Model):
     """ Cada linha de produto dentro de uma Contagem de Estoque. """
     contagem = models.ForeignKey(ContagemEstoque, related_name="itens", on_delete=models.CASCADE)
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, limit_choices_to={'tipo': 'INSUMO'})
-    quantidade_sistema = models.FloatField(help_text="Quantidade que o sistema calculava ter no momento da contagem")
-    quantidade_fisica = models.FloatField(help_text="Quantidade que foi contada fisicamente")
+    quantidade_sistema = models.IntegerField(default=0, help_text="Quantidade que o sistema calculava ter no momento da contagem")
+    quantidade_fisica = models.IntegerField(default=0, help_text="Quantidade que foi contada fisicamente")
 
     @property
     def diferenca(self):
