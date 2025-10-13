@@ -133,17 +133,16 @@ class EstoqueAdmin(admin.ModelAdmin):
                 novo_pedido.delete() # Apaga o pedido vazio que foi criado
                 return redirect('admin:estoque_estoque_changelist')
 
-        # Lógica para exibir a página (GET)
+        # ✅ 1. Filtramos para sugerir apenas INSUMOS que estão abaixo do estoque mínimo.
         itens_sugeridos = Estoque.objects.filter(
             unidade=unidade, 
-            quantidade__lte=F('estoque_minimo')
+            quantidade__lte=F('estoque_minimo'),
+            produto__tipo='INSUMO'  # <-- Adicionamos este filtro
         ).select_related('produto')
         
         sugestoes = []
         for item in itens_sugeridos:
-            # ✅ AQUI ESTÁ A CORREÇÃO FINAL E SIMPLIFICADA NO CÁLCULO
             qtd_necessaria = (item.estoque_minimo - item.quantidade) + ESTOQUE_SEGURANCA
-            
             sugestoes.append({
                 'produto_id': item.produto.id,
                 'produto_nome': item.produto.nome,
@@ -152,7 +151,8 @@ class EstoqueAdmin(admin.ModelAdmin):
                 'estoque_minimo': item.estoque_minimo,
             })
         
-        # Pega todos os insumos para popular o dropdown de itens extras
+        # ✅ 2. A lista para adicionar outros itens já estava correta, mas confirmamos.
+        # Ela já filtra por `tipo='INSUMO'`, então nenhuma mudança é necessária aqui.
         todos_insumos = Produto.objects.filter(tipo='INSUMO').values('id', 'nome')
 
         context = {
