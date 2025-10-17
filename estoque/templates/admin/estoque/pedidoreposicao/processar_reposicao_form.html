@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+<div id="content-main">
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="module">
+            <h1>{{ title }}</h1>
+            <p style="margin-top: 1rem; margin-bottom: 1.5rem;">
+                Confira o estoque disponível na <strong>Cozinha Central</strong> e informe a quantidade que será enviada para a unidade <strong>{{ pedido.unidade_destino.nome }}</strong>.
+            </p>
+
+            <table class="table table-bordered">
+                <thead class="thead-light">
+                    <tr>
+                        <th style="width: 40%;">Produto</th>
+                        <th class="text-center">Qtd. Solicitada</th>
+                        <th class="text-center">Estoque na Cozinha</th>
+                        <th class="text-center" style="width: 15%;">Qtd. a Enviar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens_do_pedido %}
+                    <tr>
+                        <td>
+                            <strong><a href="{% url 'admin:estoque_produto_change' item.produto.id %}" target="_blank">{{ item.produto.nome }}</a></strong>
+                        </td>
+                        <td class="text-center">{{ item.quantidade_solicitada|floatformat:2 }}</td>
+                        <td class="text-center font-weight-bold {% if item.estoque_cozinha < item.quantidade_solicitada %}text-danger{% else %}text-success{% endif %}">
+                            {{ item.estoque_cozinha|floatformat:2 }}
+                        </td>
+                        <td class="text-center">
+                            <input type="number" step="0.01" name="item_{{ item.id }}" value="{{ item.quantidade_sugerida|floatformat:2 }}" class="form-control text-right" style="margin: auto;">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" value="Confirmar Envio e Transferir Estoque" class="default">
+            <a href="{% url 'admin:estoque_pedidoreposicao_changelist' %}" class="button cancel-link">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+

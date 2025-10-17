@@ -154,11 +154,12 @@ class PedidoReposicao(models.Model):
     STATUS_CHOICES = [
         ("PENDENTE", "Pendente"),
         ("CONCLUIDO", "Concluído"),
+        ("CONCLUIDO_PARCIALMENTE", "Concluído Parcialmente"),        
         ("CANCELADO", "Cancelado"),
     ]
     unidade_destino = models.ForeignKey(Unidade, on_delete=models.PROTECT, verbose_name="Unidade de Destino")
     data_criacao = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDENTE")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="PENDENTE")
 
     def __str__(self):
         return f"Pedido de Reposição #{self.id} para {self.unidade_destino.nome}"
@@ -168,6 +169,10 @@ class ItemReposicao(models.Model):
     pedido_reposicao = models.ForeignKey(PedidoReposicao, related_name="itens", on_delete=models.CASCADE)
     produto = models.ForeignKey(Produto, on_delete=models.PROTECT, limit_choices_to={'tipo': 'INSUMO'})
     quantidade_solicitada = models.FloatField()
+    quantidade_enviada = models.FloatField(
+        blank=True, null=True, 
+        help_text="Quantidade efetivamente enviada pela Cozinha. Preenchido ao concluir o pedido."
+    )    
     justificativa = models.CharField(max_length=200, blank=True, null=True, help_text="Ex: Perdas, evento especial, etc.")
 
     def __str__(self):

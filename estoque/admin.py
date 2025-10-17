@@ -173,58 +173,57 @@ class ItemReposicaoInline(admin.TabularInline):
 
 @admin.register(PedidoReposicao)
 class PedidoReposicaoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'unidade_destino', 'status_colorido', 'data_criacao','link_para_concluir')
+    list_display = ('id', 'unidade_destino', 'status_colorido', 'data_criacao','link_para_processar') # Renomeamos o link
     list_filter = ('status', 'unidade_destino')
     date_hierarchy = 'data_criacao'
     inlines = [ItemReposicaoInline]
-    
-    # ✅ Ação para gerar o novo PDF
     actions = ['gerar_pdf_pedido']
     
-    # ✅ VERSÃO FINAL USANDO CLASSES DO TEMA
+    # ✅ MÉTODO ATUALIZADO para incluir o novo status
     @admin.display(description="Status")
     def status_colorido(self, obj):
         if obj.status == 'PENDENTE':
-            classe_cor = 'warning'  # Classe para amarelo/laranja
+            classe_cor = 'warning'
         elif obj.status == 'CONCLUIDO':
-            classe_cor = 'success'  # Classe para verde
+            classe_cor = 'success'
+        # ✅ NOVO: Cor para o status parcial
+        elif obj.status == 'CONCLUIDO_PARCIALMENTE':
+            classe_cor = 'info' # Uma cor azul/ciano
         elif obj.status == 'CANCELADO':
-            classe_cor = 'secondary' # Classe para cinza
+            classe_cor = 'secondary'
         else:
-            classe_cor = 'dark'     # Classe para escuro
-
-        # Usamos as classes "badge" e "bg-..." do Bootstrap, que o Jazzmin entende.
+            classe_cor = 'dark'
+        
         return format_html(
             '<span class="badge bg-{}">{}</span>',
             classe_cor, obj.get_status_display()
         )
         
-    # ✅ Lógica para criar a URL do botão
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
             path(
-                '<path:object_id>/concluir/',
-                self.admin_site.admin_view(self.concluir_pedido_view),
-                name='concluir-pedido-reposicao' # Nome único para a URL
+                # ✅ MUDANÇA AQUI: Nova URL para a tela de processamento
+                '<path:object_id>/processar/',
+                self.admin_site.admin_view(self.processar_reposicao_view),
+                name='processar-pedido-reposicao'
             ),
         ]
-        return custom_urls + urls    
+        return custom_urls + urls
     
-    # ✅ Função para exibir o botão colorido na lista
-    def link_para_concluir(self, obj):
+    # ✅ MÉTODO ATUALIZADO: O link agora aponta para a nova view de processamento
+    def link_para_processar(self, obj):
         if obj.status == "PENDENTE":
-            url = reverse('admin:concluir-pedido-reposicao', args=[obj.pk])
-            return format_html('<a class="button" href="{}" style="background-color: #28a745;">Concluir Pedido</a>', url)
-        # Mostra o status com cor para os outros casos
-        elif obj.status == "CONCLUIDO":
-            return format_html('<span style="color: green; font-weight: bold;">{}</span>', obj.get_status_display())
+            url = reverse('admin:processar-pedido-reposicao', args=[obj.pk])
+            # Mudamos o texto do botão para ser mais claro
+            return format_html('<a class="button" href="{}" style="background-color: #0d6efd; color: white;">Processar Pedido</a>', url)
         else:
-            return obj.get_status_display()
-    link_para_concluir.short_description = "Ação"    
+            # Para os outros casos, apenas mostramos o status
+            return self.status_colorido(obj)
+    link_para_processar.short_description = "Ação"
     
-    # ✅ A view que executa a conclusão, chamada pelo botão
-    def concluir_pedido_view(self, request, object_id):
+    # ✅ NOVA VIEW COMPLETA: O coração da nova funcionalidade
+    def processar_reposicao_view(self, request, object_id):
         try:
             pedido = self.get_object(request, object_id)
             cozinha_central = Unidade.objects.get(nome="Cozinha Central")
@@ -232,23 +231,79 @@ class PedidoReposicaoAdmin(admin.ModelAdmin):
             messages.error(request, "Erro: A unidade 'Cozinha Central' não foi encontrada.")
             return redirect(reverse("admin:estoque_pedidoreposicao_changelist"))
 
-        if pedido.status == "PENDENTE":
+        if pedido.status != "PENDENTE":
+             messages.warning(request, f"Este pedido já foi processado (Status: {pedido.get_status_display()}).")
+             return redirect(reverse("admin:estoque_pedidoreposicao_changelist"))
+
+        if request.method == 'POST':
             with transaction.atomic():
+                total_solicitado = 0
+                total_enviado = 0
+
                 for item in pedido.itens.all():
-                    Movimentacao.objects.create(
-                        tipo="TRANSFERENCIA",
-                        produto=item.produto,
-                        quantidade=item.quantidade_solicitada,
-                        origem=cozinha_central,
-                        destino=pedido.unidade_destino
-                    )
-                pedido.status = "CONCLUIDO"
+                    input_name = f'item_{item.id}'
+                    # Pega a quantidade do formulário, tratando vírgula e convertendo para float
+                    try:
+                        qtd_a_enviar = float(request.POST.get(input_name, '0').replace(',', '.'))
+                    except (ValueError, TypeError):
+                        qtd_a_enviar = 0
+                    
+                    # Salva a quantidade enviada no item do pedido, mesmo se for zero
+                    item.quantidade_enviada = qtd_a_enviar
+                    item.save()
+
+                    if qtd_a_enviar > 0:
+                        # Cria a movimentação apenas se algo for enviado
+                        Movimentacao.objects.create(
+                            tipo="TRANSFERENCIA",
+                            produto=item.produto,
+                            quantidade=qtd_a_enviar,
+                            origem=cozinha_central,
+                            destino=pedido.unidade_destino
+                        )
+                    
+                    total_solicitado += item.quantidade_solicitada
+                    total_enviado += qtd_a_enviar
+                
+                # Define o status final do pedido
+                if total_enviado >= total_solicitado:
+                    pedido.status = "CONCLUIDO"
+                elif total_enviado > 0:
+                    pedido.status = "CONCLUIDO_PARCIALMENTE"
+                else: 
+                    # Se nada foi enviado, mantém como pendente para futura ação (ex: cancelar)
+                    messages.warning(request, f"Nenhum item foi enviado para o Pedido #{pedido.id}. O status permanece Pendente.")
+                    return redirect(reverse("admin:estoque_pedidoreposicao_changelist"))
+
                 pedido.save()
-            messages.success(request, f"Pedido #{pedido.id} concluído e estoque transferido com sucesso!")
-        else:
-            messages.warning(request, f"Pedido #{pedido.id} já estava com status '{pedido.get_status_display()}'.")
-        
-        return redirect(reverse("admin:estoque_pedidoreposicao_changelist"))    
+            
+            messages.success(request, f"Pedido #{pedido.id} processado com sucesso!")
+            return redirect(reverse("admin:estoque_pedidoreposicao_changelist"))
+
+        # Lógica para exibir a página (GET)
+        itens_com_estoque = []
+        for item in pedido.itens.all():
+            estoque_cozinha = Estoque.objects.filter(unidade=cozinha_central, produto=item.produto).first()
+            qtd_estoque = estoque_cozinha.quantidade if estoque_cozinha else 0
+            
+            # Sugere enviar o mínimo entre o que foi pedido e o que há em estoque
+            qtd_sugerida = min(item.quantidade_solicitada, qtd_estoque)
+
+            itens_com_estoque.append({
+                'id': item.id,
+                'produto': item.produto,
+                'quantidade_solicitada': item.quantidade_solicitada,
+                'estoque_cozinha': qtd_estoque,
+                'quantidade_sugerida': qtd_sugerida
+            })
+
+        context = {
+            'title': f"Processar Pedido de Reposição #{pedido.id}",
+            'pedido': pedido,
+            'itens_do_pedido': itens_com_estoque,
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/estoque/pedidoreposicao/processar_reposicao_form.html', context) 
 
     @admin.action(description="Gerar PDF do Pedido de Reposição")
     def gerar_pdf_pedido(self, request, queryset):
