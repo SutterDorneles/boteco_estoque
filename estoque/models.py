@@ -153,6 +153,7 @@ class PedidoReposicao(models.Model):
     """ Representa UM pedido de reposição, que pode conter VÁRIOS itens. """
     STATUS_CHOICES = [
         ("PENDENTE", "Pendente"),
+        ("ENVIADO", "Enviado"),
         ("CONCLUIDO", "Concluído"),
         ("CONCLUIDO_PARCIALMENTE", "Concluído Parcialmente"),        
         ("CANCELADO", "Cancelado"),
