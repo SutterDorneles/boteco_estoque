@@ -366,7 +366,7 @@ class VendaDiariaAdmin(admin.ModelAdmin):
                             
                             item_nome_limpo = ' '.join(item_nome_sujo.split()).strip()
                             
-                            valor_quantidade = row['TOTAL']
+                            valor_quantidade = row['QTDE TOTAL']
                             
                             if pd.isna(valor_quantidade) or not item_nome_limpo or item_nome_limpo.lower() == 'nan':
                                 continue
