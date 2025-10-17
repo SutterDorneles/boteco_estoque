@@ -159,3 +159,6 @@ JAZZMIN_SETTINGS = {
         "theme": "default" # Usamos o default como base, pois nosso CSS customizado vai sobrescrever
     }
 }
+
+# ✅ ADICIONE ESTA LINHA NO FINAL DO FICHEIRO
+LOGIN_URL = '/admin/login/'

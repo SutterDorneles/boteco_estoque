@@ -4,6 +4,7 @@ from rest_framework import routers
 from django.shortcuts import render
 from estoque.models import Unidade, Produto, Movimentacao, Estoque, PedidoReposicao, PedidoCompra, VendaDiaria
 from django.db.models import Sum
+from django.contrib.auth.decorators import login_required
 from django.db.models.functions import TruncWeek 
 
 # ✅ 'ReposicaoViewSet' foi removido e as novas ViewSets foram adicionadas
@@ -26,6 +27,7 @@ router.register(r'itens-reposicao', ItemReposicaoViewSet)
 
 
 # ✅ SUBSTITUA SUA FUNÇÃO 'home' POR ESTA VERSÃO
+@login_required
 def home(request):
     # Lógica do filtro de unidade (continua igual)
     unidade_selecionada_id = request.GET.get('unidade_id')
@@ -67,6 +69,8 @@ def home(request):
     }
     return render(request, "home.html", context)
 
+
+@login_required
 def relatorios_view(request):
     # Relatório 1: Top 10 Produtos
     vendas_por_produto = (VendaDiaria.objects
