@@ -174,11 +174,30 @@ class ItemReposicaoInline(admin.TabularInline):
 @admin.register(PedidoReposicao)
 class PedidoReposicaoAdmin(admin.ModelAdmin):
     # ... (toda a configuração da classe PedidoReposicaoAdmin permanece a mesma) ...
-    list_display = ('id', 'unidade_destino', 'status_colorido', 'data_criacao', 'link_para_enviar', 'link_para_receber')
+    #list_display = ('id', 'unidade_destino', 'status_colorido', 'data_criacao', 'link_para_enviar', 'link_para_receber')
     list_filter = ('status', 'unidade_destino')
     date_hierarchy = 'data_criacao'
     inlines = [ItemReposicaoInline]
     actions = ['gerar_pdf_pedido']
+    
+    def get_list_display(self, request):
+        # Colunas básicas comuns a todos
+        cols = ['id', 'unidade_destino', 'status_colorido', 'data_criacao']
+
+        is_superuser = request.user.is_superuser
+        
+        # ✅ AJUSTADO: Nomes dos grupos conforme você alterou no Admin
+        is_cozinha = request.user.groups.filter(name='cozinha').exists()
+        is_gerente = request.user.groups.filter(name='gerentes').exists()
+
+        if is_superuser:
+             cols.extend(['link_para_enviar', 'link_para_receber'])
+        elif is_cozinha:
+             cols.append('link_para_enviar')
+        elif is_gerente:
+             cols.append('link_para_receber')
+        
+        return cols
     
     @admin.display(description="Status")
     def status_colorido(self, obj):
