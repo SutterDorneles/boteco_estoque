@@ -291,7 +291,7 @@ class PedidoReposicaoAdmin(admin.ModelAdmin):
             
             # ✅ 2. SUGESTÃO INTELIGENTE: Calcula o mínimo entre o solicitado e o disponível,
             # mas garante que o resultado nunca seja menor que zero.
-            qtd_sugerida = max(0, min(item.quantidade_solicitada, qtd_estoque))
+            qtd_sugerida = int(item.quantidade_solicitada)
 
             itens_com_estoque.append({
                 'id': item.id, 'produto': item.produto, 'quantidade_solicitada': item.quantidade_solicitada,
