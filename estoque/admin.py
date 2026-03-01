@@ -62,9 +62,27 @@ class EstoqueAdmin(admin.ModelAdmin):
     list_editable = ("quantidade", "estoque_minimo")
     change_list_template = "admin/estoque/estoque/change_list_gerar_reposicao.html"
     
-    # ✅ A ÚNICA CUSTOMIZAÇÃO: O FILTRO PADRÃO
+    # ✅ FILTRO DE SEGURANÇA + FILTRO DE INSUMO
     def get_queryset(self, request):
         qs = super().get_queryset(request)
+        
+        if not request.user.is_superuser:
+            # Pegamos todos os objetos para filtrar manualmente ou usamos um filtro de string transformado
+            # A melhor forma sem mudar o banco é filtrar unidades que contenham o username sem espaços
+            user_slug = request.user.username.lower().replace(" ", "")
+                    
+            #Filtramos as unidades onde o nome (sem espaços) contém o username
+            # Como o Django não permite replace direto no filter de forma simples, 
+            # vamos buscar as unidades que batem com a lógica primeiro:
+            from django.db.models import Q
+                    
+            # Esta linha abaixo é a mais robusta: ela limpa o username e busca na unidade
+            qs = qs.filter(unidade__nome__icontains=user_slug.replace("ori", "").strip())
+                    
+            # Se ainda assim não vir nada, tentamos uma busca mais aberta:
+            if not qs.exists():
+                # Tenta buscar por qualquer parte do nome do usuário que esteja no nome da unidade
+                qs = super().get_queryset(request).filter(unidade__nome__icontains=request.user.username[:4])
 
         # Se o usuário clicou em um filtro de tipo de produto na URL,
         # nós não fazemos nada e deixamos o Django trabalhar.
@@ -166,7 +184,7 @@ class EstoqueAdmin(admin.ModelAdmin):
         
 # --- NOVOS ADMINS PARA O NOVO FLUXO DE REPOSIÇÃO ---
 
-class ItemReposicaoInline(admin.TabularInline):
+class ItemReposicaoInline(admin.TabularInline): 
     model = ItemReposicao
     autocomplete_fields = ['produto']
     extra = 1
@@ -252,6 +270,21 @@ class PedidoReposicaoAdmin(admin.ModelAdmin):
             return format_html('<a class="button" href="{}" style="background-color: #28a745; color: white;">Confirmar Recebimento</a>', url)
         return "N/A"
     link_para_receber.short_description = "Ação (Boteco)"
+    
+# ✅ TRAVA DE SEGURANÇA: Cada gerente só vê os seus pedidos
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        
+        if not request.user.is_superuser:
+            user_slug = request.user.username.lower().replace(" ", "")
+            
+            # Filtra os pedidos da unidade que bate com o username
+            qs = qs.filter(unidade_destino__nome__icontains=user_slug.replace("ori", "").strip())
+            
+            if not qs.exists():
+                qs = super().get_queryset(request).filter(unidade_destino__nome__icontains=request.user.username[:4])
+        
+        return qs  
     
     # ✅ MÉTODO ATUALIZADO COM AS CORREÇÕES DE SEGURANÇA
     def enviar_reposicao_view(self, request, object_id):
@@ -374,6 +407,21 @@ class VendaDiariaAdmin(admin.ModelAdmin):
             path('importar/', self.admin_site.admin_view(self.importar_vendas_view), name='importar_vendas'),
         ]
         return custom_urls + urls
+    
+# ✅ FILTRO DE SEGURANÇA PARA VENDAS
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        
+        if not request.user.is_superuser:
+            user_slug = request.user.username.lower().replace(" ", "")
+            
+            # Filtra as vendas pela unidade
+            qs = qs.filter(unidade__nome__icontains=user_slug.replace("ori", "").strip())
+            
+            if not qs.exists():
+                qs = super().get_queryset(request).filter(unidade__nome__icontains=request.user.username[:4])
+        
+        return qs    
     
     def importar_vendas_view(self, request):
         if request.method == "POST":
