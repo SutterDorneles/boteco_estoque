@@ -79,5 +79,33 @@ def reverter_movimentacao_on_venda_delete(sender, instance, **kwargs):
             destino=instance.unidade
         )
 
-# ✅ A função 'verificar_estoque_minimo_on_update' foi REMOVIDA
-# pois a geração de reposição agora é um processo manual feito pelo gerente no Admin.
+@receiver(post_delete, sender=Movimentacao)
+def estornar_estoque_ao_excluir_movimentacao(sender, instance, **kwargs):
+    """ 
+    Se o usuário apagar uma linha na tabela de Movimentações, 
+    o estoque volta ao que era antes.
+    """
+    
+    # Se for AJUSTE (vindo da contagem), não faz nada para não estragar a "Verdade Absoluta"
+    if instance.tipo == 'AJUSTE':
+        return
+
+    # 1. Se apagou uma SAÍDA (tinha origem): Devolve o que saiu para a origem
+    if instance.origem:
+        estoque_origem, _ = Estoque.objects.get_or_create(
+            unidade=instance.origem, 
+            produto=instance.produto,
+            defaults={'quantidade': 0}
+        )
+        estoque_origem.quantidade += instance.quantidade
+        estoque_origem.save()
+
+    # 2. Se apagou uma ENTRADA (tinha destino): Retira o que entrou do destino
+    if instance.destino:
+        estoque_destino, _ = Estoque.objects.get_or_create(
+            unidade=instance.destino, 
+            produto=instance.produto,
+            defaults={'quantidade': 0}
+        )
+        estoque_destino.quantidade -= instance.quantidade
+        estoque_destino.save()
