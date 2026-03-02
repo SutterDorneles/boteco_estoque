@@ -588,81 +588,130 @@ class PedidoCompraAdmin(admin.ModelAdmin):
             self.message_user(request, f"{pedidos_pendentes.count()} pedido(s) foram marcados como 'Recebido' e o estoque foi atualizado.", messages.SUCCESS)
         else:
             self.message_user(request, "Nenhum pedido pendente foi selecionado.", messages.WARNING)
-            
+
 
 @admin.register(ContagemEstoque)
 class ContagemEstoqueAdmin(admin.ModelAdmin):
-    list_display = ('id', 'unidade', 'data_contagem', 'responsavel', 'finalizada')
-    list_filter = ('unidade', 'finalizada')
-    
-    # ✅ Declaramos nosso template customizado aqui.
-    # Ele será usado tanto para a tela de ADICIONAR quanto para a de ALTERAR.
+    list_display = ('id', 'unidade', 'data_contagem', 'responsavel', 'status')
+    list_filter = ('unidade', 'status')
     change_form_template = 'admin/estoque/contagemestoque/change_form.html'
     
-    # ✅ Adicionamos a nova ação aqui
-    actions = ['finalizar_e_ajustar_estoque']    
+    # ✅ Adicionamos as ações (Botões do topo)
+    actions = ['aprovar_e_ajustar_estoque', 'cancelar_contagem']
     
-    # ✅ A LÓGICA DA NOVA AÇÃO
-    @admin.action(description="Finalizar e Ajustar Estoque para contagens selecionadas")
-    def finalizar_e_ajustar_estoque(self, request, queryset):
-        # Filtra apenas as contagens que ainda não foram finalizadas
-        contagens_para_processar = queryset.filter(finalizada=False)
+# --- SEGURANÇA E TRAVAS ---
+
+    def get_queryset(self, request):
+        """ ✅ CHECK: Gerente só vê as contagens da própria unidade """
+        qs = super().get_queryset(request)
+        if not request.user.is_superuser:
+            user_slug = request.user.username.lower().replace(" ", "").replace("ori", "").strip()
+            qs = qs.filter(unidade__nome__icontains=user_slug)
+        return qs    
+
+    def get_actions(self, request):
+        """ ✅ CHECK: Esconde os botões 'Aprovar' e 'Cancelar' de quem não é ADM """
+        actions = super().get_actions(request)
+        if not request.user.is_superuser:
+            if 'aprovar_e_ajustar_estoque' in actions:
+                del actions['aprovar_e_ajustar_estoque']
+            if 'cancelar_contagem' in actions:
+                del actions['cancelar_contagem']
+        return actions
+
+    def get_readonly_fields(self, request, obj=None):
+        """ ✅ CHECK: Unidade fica editável na criação (para o initial funcionar) e trava na edição """
+        if not request.user.is_superuser:
+            # Se já existe (obj), trava tudo. Se é novo (None), deixa unidade fora do readonly por 1 segundo
+            if obj:
+                return ('unidade', 'status', 'data_contagem')
+            return ('status', 'data_contagem') # Unidade NÃO entra aqui na criação
+        
+        return ('status',)
+
+    def get_form(self, request, obj=None, **kwargs):
+        """ ✅ CHECK: Unidade já vem preenchida e é a ÚNICA opção disponível """
+        form = super().get_form(request, obj, **kwargs)
+        
+        if not request.user.is_superuser:
+            # Identifica a unidade do gerente pelo username
+            user_slug = request.user.username.lower().replace(" ", "").replace("ori", "").strip()
+            unidade_queryset = Unidade.objects.filter(nome__icontains=user_slug)
+            
+            if 'unidade' in form.base_fields:
+                # 1. Filtra a lista (só vai aparecer a dele na setinha)
+                form.base_fields['unidade'].queryset = unidade_queryset
+                
+                # 2. Se for uma contagem nova, já deixa selecionada
+                if not obj and unidade_queryset.exists():
+                    form.base_fields['unidade'].initial = unidade_queryset.first()
+                    
+                    # 💡 Dica extra: se quiser que ele nem consiga clicar, 
+                    # mas o campo continue sendo enviado no formulário:
+                    # form.base_fields['unidade'].widget.attrs['style'] = 'pointer-events: none;'
+                
+        return form
+
+    @admin.action(description="Aprovar Contagem e Forçar Estoque Real")
+    def aprovar_e_ajustar_estoque(self, request, queryset):
+        contagens_para_processar = queryset.filter(status='pendente')
         
         if not contagens_para_processar:
-            self.message_user(request, "Nenhuma contagem não finalizada foi selecionada.", messages.WARNING)
+            self.message_user(request, "Nenhuma contagem PENDENTE selecionada.", messages.WARNING)
             return
 
         with transaction.atomic():
             for contagem in contagens_para_processar:
-                # Itera em cada item dentro da contagem
-                for item in contagem.itens.all():
-                    diferenca = item.diferenca
+                # ✅ BUSCA DIRETA: Pegamos todos os itens salvos nesta contagem
+                # Se der erro de 'itemcontagemestoque_set', tente 'itens'
+                itens_salvos = ItemContagemEstoque.objects.filter(contagem=contagem)
+                
+                for item in itens_salvos:
+                    # ✅ O "PULO DO GATO": Forçamos o estoque a ser exatamente a 'quantidade_fisica'
+                    estoque_real, created = Estoque.objects.get_or_create(
+                        unidade=contagem.unidade,
+                        produto=item.produto,
+                        defaults={'quantidade': 0}
+                    )
                     
-                    # Se não há diferença, não faz nada, só continua
-                    if diferenca == 0:
-                        continue
-                    
-                    # Se a diferença for POSITIVA (contou mais do que o sistema tinha),
-                    # criamos uma movimentação de AJUSTE de ENTRADA.
-                    elif diferenca > 0:
+                    # Aqui a mágica acontece: o estoque vira o seu "150"
+                    estoque_real.quantidade = item.quantidade_fisica
+                    estoque_real.save()
+
+                    # Criamos a movimentação apenas para registro histórico
+                    diferenca = item.quantidade_fisica - item.quantidade_sistema
+                    if diferenca != 0:
                         Movimentacao.objects.create(
                             tipo="AJUSTE",
                             produto=item.produto,
-                            quantidade=diferenca,
-                            origem=None,
-                            destino=contagem.unidade
-                        )
-                    # Se a diferença for NEGATIVA (contou menos, houve perda/saída não registrada),
-                    # criamos uma movimentação de AJUSTE de SAÍDA.
-                    else:
-                        Movimentacao.objects.create(
-                            tipo="AJUSTE",
-                            produto=item.produto,
-                            quantidade=abs(diferenca), # A quantidade é sempre positiva
-                            origem=contagem.unidade,
-                            destino=None
+                            quantidade=abs(diferenca),
+                            origem=contagem.unidade if diferenca < 0 else None,
+                            destino=contagem.unidade if diferenca > 0 else None
                         )
                 
-                # Após processar todos os itens, marca a contagem como finalizada
-                # para evitar que seja processada novamente no futuro.
-                contagem.finalizada = True
+                # Finaliza o processo
+                contagem.status = 'aprovado'
                 contagem.save()
         
-        self.message_user(request, f"{contagens_para_processar.count()} contagem(ns) foram finalizadas e o estoque foi ajustado.", messages.SUCCESS)    
+        self.message_user(request, "Estoque atualizado com sucesso conforme a contagem física!", messages.SUCCESS)
 
-    # Esta função é chamada QUANDO a página de edição/criação é carregada
+    @admin.action(description="Cancelar contagens selecionadas")
+    def cancelar_contagem(self, request, queryset):
+        queryset.filter(status='pendente').update(status='cancelado')
+        self.message_user(request, "Contagens canceladas com sucesso.")
+
+    # ✅ 2. VIEW DE EDIÇÃO (Bloqueia se não for pendente)
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         contagem = self.get_object(request, object_id)
 
-        # Se a contagem já foi finalizada, não permite mais edições na tabela
-        if contagem and contagem.finalizada:
+        # Se não for pendente, avisa o template para travar os campos
+        if contagem and contagem.status != 'pendente':
             extra_context['contagem_finalizada'] = True
             return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
-        # Pega todos os produtos que são INSUMOS
+        # Lógica para carregar os insumos na tabela
         todos_insumos = Produto.objects.filter(tipo='INSUMO').order_by('nome')
-        
         itens_para_contagem = []
         for produto in todos_insumos:
             try:
@@ -671,8 +720,8 @@ class ContagemEstoqueAdmin(admin.ModelAdmin):
             except Estoque.DoesNotExist:
                 qtd_sistema = 0
 
-            item_contagem_existente = ItemContagemEstoque.objects.filter(contagem=contagem, produto=produto).first()
-            qtd_fisica = item_contagem_existente.quantidade_fisica if item_contagem_existente else None
+            item_existente = ItemContagemEstoque.objects.filter(contagem=contagem, produto=produto).first()
+            qtd_fisica = item_existente.quantidade_fisica if item_existente else None
 
             itens_para_contagem.append({
                 'produto_id': produto.id,
@@ -683,25 +732,20 @@ class ContagemEstoqueAdmin(admin.ModelAdmin):
         
         extra_context['itens_para_contagem'] = itens_para_contagem
         
-        # Processa o formulário quando o usuário clica em "Salvar Contagem"
+        # Lógica de Salvar (POST)
         if request.method == 'POST' and '_save_contagem' in request.POST:
             with transaction.atomic():
                 for item in itens_para_contagem:
-                    produto_id = item['produto_id']
-                    quantidade_fisica_str = request.POST.get(f'produto_{produto_id}')
+                    p_id = item['produto_id']
+                    valor_str = request.POST.get(f'produto_{p_id}')
                     
-                    if quantidade_fisica_str and quantidade_fisica_str.strip() != '':
+                    if valor_str and valor_str.strip() != '':
                         try:
-                            quantidade_fisica = int(float(quantidade_fisica_str.replace(',', '.')))
-                            produto = Produto.objects.get(id=produto_id)
-                            
+                            qtd_f = float(valor_str.replace(',', '.'))
+                            prod = Produto.objects.get(id=p_id)
                             ItemContagemEstoque.objects.update_or_create(
-                                contagem=contagem,
-                                produto=produto,
-                                defaults={
-                                    'quantidade_sistema': item['quantidade_sistema'],
-                                    'quantidade_fisica': quantidade_fisica,
-                                }
+                                contagem=contagem, produto=prod,
+                                defaults={'quantidade_sistema': item['quantidade_sistema'], 'quantidade_fisica': qtd_f}
                             )
                         except (ValueError, Produto.DoesNotExist):
                             continue
@@ -711,9 +755,7 @@ class ContagemEstoqueAdmin(admin.ModelAdmin):
 
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
-    # Esta função lida com o SALVAR da tela de ADIÇÃO
+    # ✅ Redireciona para preencher os itens logo após criar o cabeçalho
     def response_add(self, request, obj, post_url_continue=None):
-        # Em vez de redirecionar para a lista, redirecionamos para a tela de ALTERAÇÃO
-        # para que o usuário possa preencher a tabela de contagem.
         return redirect(reverse('admin:estoque_contagemestoque_change', args=[obj.pk]))
-    
+

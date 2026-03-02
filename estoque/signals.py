@@ -8,6 +8,11 @@ from django.db.models import F
 def atualizar_estoque_on_movimentacao(sender, instance, created, **kwargs):
     if not created:
         return
+    
+# ✅ TRAVA DE SEGURANÇA: 
+    # Se for AJUSTE (vindo da contagem), o Signal ignora e não altera o estoque.
+    if instance.tipo == 'AJUSTE':
+        return    
 
     # Debita da origem (SAIDA ou TRANSFERENCIA)
     if instance.origem:

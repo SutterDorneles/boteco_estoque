@@ -186,8 +186,15 @@ class ContagemEstoque(models.Model):
     unidade = models.ForeignKey(Unidade, on_delete=models.PROTECT)
     data_contagem = models.DateTimeField(default=timezone.now)
     responsavel = models.CharField(max_length=100, help_text="Nome da pessoa que realizou a contagem")
-    finalizada = models.BooleanField(default=False, help_text="Marca se os ajustes desta contagem já foram processados")
     observacoes = models.TextField(blank=True, null=True)
+    
+    # ✅ TROCAMOS O 'FINALIZADA' POR STATUS PARA TER A APROVAÇÃO
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente (Aguardando ADM)'),
+        ('aprovado', 'Aprovado (Estoque Atualizado)'),
+        ('cancelado', 'Cancelado'),
+    ]
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pendente')
 
     def __str__(self):
         return f"Contagem em {self.unidade.nome} - {self.data_contagem.strftime('%d/%m/%Y')}"

@@ -38,10 +38,16 @@
                 </div>
             </form>
         </div>
+{# ✅ AJUSTE AQUI: Mostra a mensagem correta baseada no novo Status #}
     {% elif contagem_finalizada %}
-        <div style="padding: 20px; border: 1px solid orange; background-color: #fffbe6; margin-top: 20px;">
-            <h2 style="color: orange;">Contagem Finalizada</h2>
-            <p>Os ajustes de estoque para esta contagem já foram processados. Não é possível fazer novas alterações.</p>
+        <div style="padding: 20px; border: 1px solid #ccc; background-color: #f9f9f9; margin-top: 20px;">
+            {% if original.status == 'aprovado' %}
+                <h2 style="color: #264b33;">✅ Contagem Aprovada</h2>
+                <p>O estoque desta unidade já foi atualizado com base nestes valores. <strong>Edição bloqueada.</strong></p>
+            {% elif original.status == 'cancelado' %}
+                <h2 style="color: #ba2121;">❌ Contagem Cancelada</h2>
+                <p>Esta contagem foi descartada pelo administrador e não afetou o estoque.</p>
+            {% endif %}
         </div>
     {% endif %}
 {% endblock %}
